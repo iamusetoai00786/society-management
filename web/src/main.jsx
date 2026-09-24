@@ -6,6 +6,12 @@ import ErrorBoundary from './components/ErrorBoundary'
 import { AppProvider } from './context/AppContext'
 import './index.css'
 
+// API errors are already shown as toasts by useAction; don't also surface them
+// as uncaught promise rejections.
+window.addEventListener('unhandledrejection', (e) => {
+  if (e.reason?.status) e.preventDefault()
+})
+
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <BrowserRouter>

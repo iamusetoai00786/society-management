@@ -3,8 +3,10 @@ import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, Res
 import { Wallet, Users, Wrench, DoorOpen, AlertTriangle, CheckCircle2, Info, Sparkles, ArrowRight, Receipt, CalendarDays, Megaphone, ShieldAlert, Clock } from 'lucide-react'
 import { useApp, useApi, useAction } from '../context/AppContext'
 import { api } from '../api/client'
-import { Card, CardHeader, Stat, Badge, Button, AIBadge, inr, ago, fmtDate, Skeleton, PageHeader, cx } from '../components/ui'
+import { Card, CardHeader, Stat, Badge, Button, AIBadge, UnitLink, inr, ago, fmtDate, Skeleton, PageHeader, cx } from '../components/ui'
 import Visitors from './Visitors'
+import { PlatformOverview } from './Societies'
+import { SetupChecklist } from './Guide'
 
 const PIE = ['#6366f1', '#a855f7', '#ec4899', '#f59e0b', '#10b981', '#0ea5e9', '#64748b']
 const tip = { contentStyle: { borderRadius: 12, border: '1px solid #e2e8f0', fontSize: 12 }, formatter: (v) => inr(v) }
@@ -35,23 +37,25 @@ export function InsightsList({ limit }) {
 }
 
 function AdminDashboard() {
-  const { user, askAssistant } = useApp()
+  const { user, society, askAssistant } = useApp()
   const { data: s } = useApi('/api/dashboard/summary')
+  const { data: setup } = useApi('/api/setup/checklist')
   const { data: tickets } = useApi('/api/tickets')
   const { data: expenses } = useApi('/api/expenses?status=pending')
   const { run } = useAction()
   const hour = new Date().getHours()
   return (
     <>
-      <PageHeader title={`Good ${hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening'}, ${user.name.split(' ')[0]} 👋`} subtitle="Here’s what’s happening at Green Valley Residency today."
+      <PageHeader title={`Good ${hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening'}, ${user.name.split(' ')[0]} 👋`} subtitle={`Here’s what’s happening at ${society?.name} today.`}
         actions={<><Button variant="secondary" icon={Receipt} onClick={() => run(() => api.post('/api/invoices/remind-all'), (r) => `Reminders sent to ${r.count} units`)}>Remind defaulters</Button><Button variant="ai" icon={Sparkles} onClick={() => askAssistant('Give me a summary of the society status')}>AI daily brief</Button></>} />
 
+      {setup && setup.done < setup.total && <div className="mb-6"><SetupChecklist compact /></div>}
       {!s ? <Card><Skeleton rows={3} /></Card> : (
         <>
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <Stat label="Collected this month" value={inr(s.collectedThisMonth)} sub={`${Math.round(s.collectionRate * 100)}% of units paid`} icon={Wallet} tone="green" trend={s.collectionRate > 0.75 ? 'up' : 'down'} />
             <Stat label="Outstanding dues" value={inr(s.outstanding)} sub="All periods, incl. late fees" icon={Receipt} tone="amber" />
-            <Stat label="Open tickets" value={s.openTickets} sub="Across all categories" icon={Wrench} tone="rose" />
+            <Stat label="Open tickets" value={s.openTickets} sub={s.slaBreached ? `${s.slaBreached} past SLA` : 'All within SLA'} trend={s.slaBreached ? 'down' : 'up'} icon={Wrench} tone="rose" />
             <Stat label="Visitors today" value={s.visitorsToday} sub={`${s.visitorsInside} currently inside`} icon={DoorOpen} tone="sky" />
           </div>
 
@@ -128,7 +132,7 @@ function AdminDashboard() {
               <li key={t.id} className="flex items-center gap-3 px-5 py-3">
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium">{t.title}</p>
-                  <p className="text-xs text-slate-500">{t.id} · {t.unitId} · {ago(t.createdAt)}</p>
+                  <p className="flex items-center gap-1.5 text-xs text-slate-500">{t.id} · <UnitLink id={t.unitId} /> · {ago(t.createdAt)}</p>
                 </div>
                 <Badge>{t.priority}</Badge>
                 <Badge>{t.status}</Badge>
@@ -143,7 +147,7 @@ function AdminDashboard() {
               <li key={e.id} className="flex flex-wrap items-center gap-3 px-5 py-3">
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium">{e.description}</p>
-                  <p className="text-xs text-slate-500">{e.vendor} · {fmtDate(e.date)}</p>
+                  <p className="text-xs text-slate-500">{e.vendor} · {fmtDate(e.date)} · by {e.createdBy}</p>
                 </div>
                 <p className="font-semibold">{inr(e.amount)}</p>
                 <div className="flex gap-1">
@@ -161,7 +165,7 @@ function AdminDashboard() {
 }
 
 function ResidentDashboard() {
-  const { user, askAssistant } = useApp()
+  const { user, society, askAssistant } = useApp()
   const navigate = useNavigate()
   const { data: s } = useApi('/api/dashboard/summary')
   const { data: pending } = useApi('/api/visitors?status=pending')
@@ -172,7 +176,7 @@ function ResidentDashboard() {
   const mine = (tickets || []).filter((t) => t.unitId === user.unitId)
   return (
     <>
-      <PageHeader title={`Hi ${user.name.split(' ')[0]} 👋`} subtitle={`${user.unitId} · Green Valley Residency`} />
+      <PageHeader title={`Hi ${user.name.split(' ')[0]} 👋`} subtitle={`${user.unitId} · ${society?.name}`} />
 
       {pending?.map((v) => (
         <Card key={v.id} className="animate-pop mb-4 flex flex-wrap items-center gap-4 border-amber-300 bg-amber-50 p-4 dark:border-amber-500/40 dark:bg-amber-500/10">
@@ -192,7 +196,7 @@ function ResidentDashboard() {
         <Card className="ai-gradient p-6 text-white md:col-span-2">
           <p className="text-sm text-white/80">Your outstanding dues</p>
           <p className="mt-1 text-4xl font-bold">{s ? inr(s.myDues.total) : '…'}</p>
-          <p className="mt-1 text-sm text-white/80">{s?.myDues.count ? `${s.myDues.count} bill(s) pending · due on the 10th` : 'All caught up!'}</p>
+          <p className="mt-1 text-sm text-white/80">{s?.myDues.count ? `${s.myDues.count} bill(s) pending · due on day ${society?.billing?.dueDay ?? 10}` : 'All caught up!'}</p>
           <div className="mt-5 flex flex-wrap gap-2">
             <button onClick={() => navigate('/billing')} className="rounded-xl bg-white px-4 py-2 text-sm font-semibold text-brand-700 shadow">Pay now with UPI</button>
             <button onClick={() => askAssistant('What are my dues?')} className="flex items-center gap-1.5 rounded-xl bg-white/20 px-4 py-2 text-sm font-semibold backdrop-blur"><Sparkles className="size-4" /> Explain my bill</button>
@@ -237,7 +241,7 @@ function ResidentDashboard() {
             {(bookings || []).slice(0, 3).map((b) => (
               <li key={b.id} className="flex items-center gap-3 px-5 py-3">
                 <CalendarDays className="size-4 text-slate-400" />
-                <p className="flex-1 truncate text-sm">{b.amenityId.replace('am_', '').replace(/^\w/, (c) => c.toUpperCase())} · {fmtDate(b.date, { day: 'numeric', month: 'short' })} · {b.slot}</p>
+                <p className="flex-1 truncate text-sm">{b.amenity} · {fmtDate(b.date, { day: 'numeric', month: 'short' })} · {b.slot}</p>
                 <Badge>{b.status}</Badge>
               </li>
             ))}
@@ -254,7 +258,8 @@ function ResidentDashboard() {
 }
 
 export default function Dashboard() {
-  const { user } = useApp()
-  if (user.role === 'guard') return <Visitors />
-  return user.role === 'admin' ? <AdminDashboard /> : <ResidentDashboard />
+  const { role } = useApp()
+  if (role === 'platform') return <PlatformOverview />
+  if (role === 'guard') return <Visitors />
+  return role === 'admin' ? <AdminDashboard /> : <ResidentDashboard />
 }

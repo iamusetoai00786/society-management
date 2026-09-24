@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { Plus, Sparkles, Wrench, MessageCircle, Star, Camera, LayoutGrid, List } from 'lucide-react'
 import { useApp, useApi, useAction } from '../context/AppContext'
 import { api } from '../api/client'
-import { Card, Badge, Button, Table, PageHeader, Skeleton, Input, Textarea, Select, Field, Modal, Tabs, AIBadge, Avatar, ago, cx } from '../components/ui'
+import { Card, Badge, Button, Table, PageHeader, Skeleton, Input, Textarea, Select, Field, Modal, Tabs, AIBadge, Avatar, UnitLink, ago, fmtDate, cx } from '../components/ui'
 
 const STATUSES = ['open', 'assigned', 'in_progress', 'resolved', 'closed']
 const MOOD = { angry: '😠', frustrated: '😤', concerned: '😟', neutral: '🙂' }
@@ -27,7 +27,7 @@ function NewTicket({ open, onClose, seed }) {
     return () => clearTimeout(t)
   }, [f])
   const submit = async () => {
-    await run(() => api.post('/api/tickets', { ...f, ...(ai ? { category: ai.category, priority: ai.priority, assignee: ai.suggestedAssignee, scope: ai.scope, sentiment: ai.sentiment } : {}) }), (t) => `${t.id} raised and routed to ${t.assignee}`)
+    await run(() => api.post('/api/tickets', { ...f, ...(ai ? { category: ai.category, priority: ai.priority, scope: ai.scope } : {}) }), (t) => `${t.id} raised and routed to ${t.assignee}`)
     onClose()
   }
   return (
@@ -46,6 +46,7 @@ function NewTicket({ open, onClose, seed }) {
               <div className="flex justify-between"><dt className="text-slate-500">Priority</dt><dd><Badge>{ai.priority}</Badge></dd></div>
               <div className="flex justify-between"><dt className="text-slate-500">Area</dt><dd className="capitalize">{ai.scope}</dd></div>
               <div className="flex justify-between"><dt className="text-slate-500">Assign to</dt><dd className="font-medium">{ai.suggestedAssignee}</dd></div>
+              <div className="flex justify-between"><dt className="text-slate-500">SLA</dt><dd>{ai.slaHours} hours</dd></div>
               <div className="flex justify-between"><dt className="text-slate-500">Confidence</dt><dd>{Math.round(ai.confidence * 100)}%</dd></div>
             </dl>
           )}
@@ -60,6 +61,7 @@ function TicketDetail({ ticket, onClose }) {
   const [text, setText] = useState('')
   const { run } = useAction()
   const [t, setT] = useState(ticket)
+  const { data: staff } = useApi(user.role !== 'resident' ? '/api/staff' : null)
   useEffect(() => {
     setT(ticket)
   }, [ticket])
@@ -79,11 +81,11 @@ function TicketDetail({ ticket, onClose }) {
           {t.sentiment && <span className="text-xs text-slate-500">{MOOD[t.sentiment]} {t.sentiment}</span>}
         </div>
         <p className="text-sm">{t.description || 'No additional details.'}</p>
-        <p className="text-xs text-slate-500">Raised by {t.raisedBy} ({t.unitId}) · {ago(t.createdAt)} · Assigned to <strong>{t.assignee || 'nobody yet'}</strong></p>
+        <p className="flex flex-wrap items-center gap-1 text-xs text-slate-500">Raised by {t.raisedBy} <UnitLink id={t.unitId} /> · {ago(t.createdAt)} · Assigned to <strong>{t.assignee || 'nobody yet'}</strong> · SLA due {fmtDate(t.slaDueAt, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}{t.slaBreached && <Badge tone="red">SLA breached</Badge>}</p>
         {user.role === 'admin' && (
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Status"><Select value={t.status} onChange={(e) => patch({ status: e.target.value }, 'Status updated')} options={STATUSES.map((s) => ({ value: s, label: s.replace('_', ' ') }))} /></Field>
-            <Field label="Assignee"><Select value={t.assignee || ''} onChange={(e) => patch({ assignee: e.target.value, status: t.status === 'open' ? 'assigned' : t.status }, 'Assigned')} options={['', 'Suresh (Plumber)', 'Mahesh (Electrician)', 'Otis AMC Team', 'Ram Singh (Security)', 'CleanPro Team', 'Facility Manager', 'Committee'].map((x) => ({ value: x, label: x || 'Unassigned' }))} /></Field>
+            <Field label="Assignee"><Select value={t.assignee || ''} onChange={(e) => patch({ assignee: e.target.value, status: t.status === 'open' ? 'assigned' : t.status }, 'Assigned')} options={[{ value: '', label: 'Unassigned' }, ...(staff || []).map((x) => ({ value: x.name, label: `${x.name} · ${x.role}` }))]} /></Field>
           </div>
         )}
         <div>
@@ -148,6 +150,7 @@ export default function Helpdesk() {
                       <p className="mt-1 text-sm font-medium">{t.title}</p>
                       <div className="mt-2 flex flex-wrap items-center gap-1.5"><Badge>{t.priority}</Badge><Badge tone="purple">{t.category}</Badge></div>
                       <p className="mt-2 text-xs text-slate-500">{t.unitId} · {ago(t.createdAt)}{t.assignee && ` · ${t.assignee}`}</p>
+                      {t.slaBreached && <Badge tone="red" className="mt-2">SLA breached</Badge>}
                     </button>
                   ))}
                   {!col.length && <p className="py-6 text-center text-xs text-slate-400">Empty</p>}
@@ -163,7 +166,8 @@ export default function Helpdesk() {
             { key: 'title', label: 'Title', render: (t) => <span className="font-medium">{t.title}</span> },
             { key: 'category', label: 'Category', render: (t) => <Badge tone="purple">{t.category}</Badge> },
             { key: 'priority', label: 'Priority', render: (t) => <Badge>{t.priority}</Badge> },
-            { key: 'unitId', label: 'Unit' },
+            { key: 'unitId', label: 'Unit', render: (t) => <UnitLink id={t.unitId} /> },
+            { key: 'sla', label: 'SLA', render: (t) => (t.slaBreached ? <Badge tone="red">Breached</Badge> : ['resolved', 'closed'].includes(t.status) ? <span className="text-slate-400">Met</span> : <span className="text-xs text-slate-500">{fmtDate(t.slaDueAt, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>) },
             { key: 'assignee', label: 'Assignee', render: (t) => t.assignee || <span className="text-slate-400">Unassigned</span> },
             { key: 'status', label: 'Status', render: (t) => <Badge>{t.status}</Badge> },
             { key: 'createdAt', label: 'Age', render: (t) => ago(t.createdAt), className: 'text-slate-500' },

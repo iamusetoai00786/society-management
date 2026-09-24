@@ -1,6 +1,6 @@
-# SocietyOS: Society Management App
+# SocietyOS: Society Management Platform
 
-A platform for residential societies covering billing and payments, accounting, visitor and gate management, complaints, communication, amenity booking and documents, with built-in AI features.
+A multi-society (SaaS) platform for residential societies. The platform owner onboards societies. Each society's committee sets up its **master tables**, then residents, guards and staff work on the same connected data: billing, accounting, gate, helpdesk, notices, bookings and AI insights.
 
 ## Quick start
 
@@ -10,58 +10,86 @@ npm install
 npm run dev        # http://localhost:5173
 ```
 
-Choose a demo role on the login screen: **Society Admin**, **Resident (B-203)** or **Security Guard**. You can switch roles at any time from the user menu.
+Sign in with two clicks: choose **Platform owner** or one of the 3 sample societies, then choose a person (admin, guard or resident). To switch to someone else in the same society, use the user menu (top right).
 
-No backend is needed. All data comes from an in-browser mock REST API, is saved in `localStorage`, and can be reset under **Settings → Reset demo data**.
+No backend is needed. A mock REST API runs in the browser and saves to `localStorage`. **Settings → Reset demo data** restores the samples.
 
-## Features
+## How the data flows
 
-| Area | What's included |
+```
+Platform owner ─ onboards ─▶ Society
+                              │
+Master tables  (set up once)  ▼
+  Blocks ─▶ Units ◀─ Unit types           Charge heads ─┐
+  Staff ─▶ guard logins, ticket assignees               │
+  Complaint categories (SLA, owner)   Expense categories (budget)
+  Amenities   Vendors                                   │
+                              │                         │
+People                        ▼                         │
+  Residents (owner/tenant) live in Units, app access ─▶ login
+  Parking slots allotted to Units ──────────────────────┤
+                              │                         │
+Daily transactions            ▼                         ▼
+  Invoices (lines from charge heads) ─▶ Payments (full/part) ─▶ Unit ledger
+  Expenses ─▶ maker–checker approval      Visitors ─▶ resident approval / OTP pass
+  Tickets ─▶ AI triage ─▶ staff ─▶ SLA ─▶ rating   Bookings · Notices · Polls · SOS
+                              │
+Outputs                       ▼
+  Dashboards · Reports · AI Insights · Activity log (who did what)
+```
+
+Click any unit code (e.g. `B-203`) anywhere in the app to open its **Unit 360°** view: residents, parking, next bill preview, full ledger with an AI explanation, visitors and tickets.
+
+## Documentation
+
+- **[User guide](docs/USER_GUIDE.md):** data flow, master tables, who does what, **35 step-by-step scenarios** and every business rule. The same content is in the app under **How it works**.
+- **[API reference](docs/API.md):** 88 endpoints, multi-tenant conventions.
+- **[Business Requirements (BRD)](docs/BRD.md)**
+
+Regenerate both docs after changing routes or scenarios: `npm run docs` (in `web/`).
+
+## Roles
+
+| Role | Can do |
 |---|---|
-| Dashboard | Role-specific: admin KPIs and charts, resident dues and gate approvals, guard gate console |
-| Residents & Units | Search and filter residents, add or remove them, and view an interactive block/floor unit map |
-| Billing | Generate bill cycles, pay by UPI/card/net banking (simulated), record offline payments, receipts, reminders |
-| Accounting | Income vs expense charts, category breakdown, expense approval workflow, CSV export |
-| Visitors & Gate | Guard console (guest/delivery/cab/service), resident approve/deny, OTP gate passes, daily-help in/out |
-| Helpdesk | Kanban and list views, AI triage, comments, AI-suggested replies, resident ratings |
-| Notices | AI notice writer (tone, streaming draft, Hindi preview), audience targeting, pinning |
-| Polls | One vote per member, live results |
-| Amenities | Slot availability by date, clash prevention, approval for halls and guest room |
-| Documents, Staff, Parking, SOS | Access-controlled documents, attendance, slot map with EV chargers, emergency alerts |
-| API Explorer | Try every endpoint live, with request bodies and a copyable `curl` command |
+| Platform owner | Onboard societies (5-step wizard with an AI structure builder), plans, suspend/activate, open any society |
+| Committee admin | Master tables, residents, billing, accounting, approvals, helpdesk, notices, settings |
+| Security guard | Gate console, OTP passes, daily help, SOS, staff attendance |
+| Resident | Pay dues (full/part), approve visitors, gate passes, complaints, bookings, polls |
 
-### AI features
-- **AI Assistant** (Ctrl/⌘ + J): chat about dues, defaulters, spend, complaints, visitors and bookings. Answers stream in word by word, include buttons that take you to the relevant page, and accept voice input (Web Speech API).
-- **Ticket triage:** assigns category, priority, sentiment, common vs personal area and staff member, and suggests a reply.
-- **Notice writer:** turns a one-line prompt into a full notice.
-- **Defaulter risk prediction:** a 0–100 risk score per unit, with a suggested follow-up.
-- **Anomaly insights:** flags spending spikes, low collection, complaint hotspots, unassigned urgent tickets and pending approvals.
-- **Command palette** (Ctrl/⌘ + K): jump to any page or resident, or send a question to the AI.
+## AI features
 
-The AI features run on a built-in rule-based engine (`web/src/api/ai.js`) that reads the live demo data. To use a real LLM, implement the `/api/ai/*` endpoints on a backend.
+- **Assistant** (Ctrl/⌘ + J): answers from live data, streams replies word by word, accepts voice input, and gives platform-level answers for the owner.
+- **Onboarding structure builder:** turns "3 towers A, B, C with 12 floors and 4 flats per floor" into blocks, units and unit types.
+- **Ticket triage:** assigns category, priority, sentiment and SLA, and routes to the owner set in the complaint-category master.
+- **Ledger explainer:** plain-language summary of a unit's dues, with a suggested next step.
+- **Insights:** flags spend spikes, budget overruns, SLA breaches, low collection, expiring vendor contracts and ending tenant leases.
+- **Defaulter risk** scoring, **notice writer** (tone + translation), and a **command palette** (Ctrl/⌘ + K).
+
+The AI runs on a built-in rule-based engine (`web/src/api/ai.js`) that reads the live data. To use a real LLM, implement the `/api/ai/*` endpoints on a backend.
 
 ## Tech stack
-React 19 · Vite 8 · React Router 7 · Tailwind CSS 4 · Recharts 3 · lucide-react. Includes dark mode, a mobile-first layout, lazy-loaded pages, and loading placeholders while data loads.
+
+React 19 · Vite 8 · React Router 7 · Tailwind CSS 4 · Recharts 3 · lucide-react. Includes dark mode, a responsive full-width layout, and paginated tables.
 
 ## Project layout
+
 ```
-docs/BRD.md                  Business Requirements Document
-docs/API.md                  REST endpoint reference (66 endpoints)
-web/src/api/db.js            Seed data + localStorage persistence
-web/src/api/mockServer.js    Mock REST routes (the "dummy API")
+docs/                        BRD, user guide, API reference
+web/src/api/db.js            Data model, 3 seeded societies, tenant scoping
+web/src/api/mockServer.js    Mock REST API (88 routes), business rules, activity log
 web/src/api/ai.js            Mock AI engine
 web/src/api/client.js        API client (mock, or real backend via VITE_API_URL)
-web/src/components/          Layout, AI assistant, UI kit
+web/src/guide.js             Scenarios & data-flow content (app + docs)
+web/src/components/          Layout, AI assistant, Unit 360° drawer, UI kit
 web/src/pages/               One file per module
+web/scripts/gen-docs.mjs     Builds docs/API.md and docs/USER_GUIDE.md
 ```
 
 ## Connecting a real backend
-Implement the routes in [docs/API.md](docs/API.md), then run:
+
+Implement the routes in [docs/API.md](docs/API.md), including the `x-society-id` header for the platform owner, then run:
 
 ```bash
 VITE_API_URL=https://api.example.com npm run dev
 ```
-
-## Documentation
-- [Business Requirements Document (BRD)](docs/BRD.md)
-- [API reference](docs/API.md)

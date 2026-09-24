@@ -21,7 +21,7 @@ export function Markdown({ text }) {
 const SpeechRecognition = typeof window !== 'undefined' && (window.SpeechRecognition || window.webkitSpeechRecognition)
 
 export default function Assistant() {
-  const { user, assistantOpen, setAssistantOpen, assistantSeed, setAssistantSeed, refresh } = useApp()
+  const { user, role, assistantOpen, setAssistantOpen, assistantSeed, setAssistantSeed, refresh } = useApp()
   const navigate = useNavigate()
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
@@ -33,8 +33,8 @@ export default function Assistant() {
 
   useEffect(() => {
     setMessages([{ role: 'assistant', text: `Hi ${user.name.split(' ')[0]}! 👋 I'm your SocietyOS AI. Ask me about dues, complaints, visitors, bookings or reports.` }])
-    setSuggestions(user.role === 'admin' ? ['Who are the top defaulters?', 'Summarise open complaints', 'How much did we spend this month?', 'Draft a notice about pest control next Monday'] : user.role === 'guard' ? ['How many visitors today?', 'Latest notices'] : ['What are my dues?', 'Book the gym tomorrow evening', 'Any notices for me?', 'Report a water leak in my kitchen'])
-  }, [user])
+    setSuggestions(role === 'platform' ? ['Which society has the lowest collection?', 'How much MRR do we make?', 'Which society has the most open tickets?'] : role === 'admin' ? ['Who are the top defaulters?', 'Summarise open complaints', 'How much did we spend this month?', 'How do I set up a new block?'] : role === 'guard' ? ['How many visitors today?', 'Latest notices'] : ['What are my dues?', 'Book the gym tomorrow evening', 'Any notices for me?', 'Report a water leak in my kitchen'])
+  }, [user, role])
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' })

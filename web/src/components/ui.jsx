@@ -1,4 +1,5 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
+import { useApp } from '../context/AppContext'
 import { X, Loader2, Sparkles } from 'lucide-react'
 
 export const cx = (...c) => c.filter(Boolean).join(' ')
@@ -171,33 +172,68 @@ export function Tabs({ tabs, value, onChange }) {
   )
 }
 
-export function Table({ columns, rows, empty = 'Nothing here yet', onRow }) {
+// Table with consistent spacing, right-aligned numbers/actions and pagination.
+// Column options: { key, label, render?, align?: 'right' | 'center', className?, nowrap? }
+// A column keyed 'x' is treated as the actions column (right-aligned, shrinks).
+export function Table({ columns, rows, empty = 'Nothing here yet', onRow, pageSize = 15, dense }) {
+  const [page, setPage] = useState(0)
+  const pages = Math.max(1, Math.ceil(rows.length / pageSize))
+  useEffect(() => {
+    if (page > pages - 1) setPage(0)
+  }, [pages, page])
+  const view = rows.slice(page * pageSize, page * pageSize + pageSize)
+  const align = (c) => (c.align === 'right' || c.key === 'x' ? 'text-right' : c.align === 'center' ? 'text-center' : 'text-left')
+  const pad = dense ? 'px-4 py-2' : 'px-5 py-3'
   return (
-    <div className="scrollbar-thin overflow-x-auto">
-      <table className="w-full text-left text-sm">
-        <thead>
-          <tr className="border-b border-slate-100 text-xs uppercase tracking-wide text-slate-500 dark:border-slate-800">
-            {columns.map((c) => (
-              <th key={c.key} className={cx('whitespace-nowrap px-5 py-3 font-medium', c.className)}>{c.label}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.length === 0 && (
-            <tr>
-              <td colSpan={columns.length} className="px-5 py-12 text-center text-slate-500">{empty}</td>
-            </tr>
-          )}
-          {rows.map((r, i) => (
-            <tr key={r.id || i} onClick={onRow ? () => onRow(r) : undefined} className={cx('border-b border-slate-50 last:border-0 dark:border-slate-800/60', onRow && 'cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/40')}>
+    <div>
+      <div className="scrollbar-thin overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-slate-100 bg-slate-50/70 text-[11px] uppercase tracking-wider text-slate-500 dark:border-slate-800 dark:bg-slate-800/30">
               {columns.map((c) => (
-                <td key={c.key} className={cx('whitespace-nowrap px-5 py-3', c.className)}>{c.render ? c.render(r) : r[c.key]}</td>
+                <th key={c.key} className={cx('whitespace-nowrap font-semibold', pad, align(c), c.key === 'x' && 'w-px')}>{c.label}</th>
               ))}
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody className="divide-y divide-slate-100 dark:divide-slate-800/70">
+            {rows.length === 0 && (
+              <tr>
+                <td colSpan={columns.length} className="px-5 py-12 text-center text-slate-500">{empty}</td>
+              </tr>
+            )}
+            {view.map((r, i) => (
+              <tr key={r.id || i} onClick={onRow ? () => onRow(r) : undefined} className={cx('transition-colors hover:bg-slate-50/80 dark:hover:bg-slate-800/40', onRow && 'cursor-pointer')}>
+                {columns.map((c) => (
+                  <td key={c.key} className={cx(pad, align(c), c.nowrap === false ? '' : 'whitespace-nowrap', c.key === 'x' && 'w-px', c.className)}>{c.render ? c.render(r) : r[c.key] ?? '—'}</td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {rows.length > pageSize && (
+        <div className="flex items-center justify-between gap-3 border-t border-slate-100 px-5 py-3 text-xs text-slate-500 dark:border-slate-800">
+          <span>Showing <strong className="text-slate-700 dark:text-slate-300">{page * pageSize + 1}–{Math.min(rows.length, (page + 1) * pageSize)}</strong> of {rows.length}</span>
+          <div className="flex items-center gap-1">
+            <button disabled={page === 0} onClick={() => setPage(page - 1)} className="rounded-lg border border-slate-200 px-2.5 py-1 font-medium disabled:opacity-40 dark:border-slate-700">Prev</button>
+            <span className="px-2">{page + 1} / {pages}</span>
+            <button disabled={page >= pages - 1} onClick={() => setPage(page + 1)} className="rounded-lg border border-slate-200 px-2.5 py-1 font-medium disabled:opacity-40 dark:border-slate-700">Next</button>
+          </div>
+        </div>
+      )}
     </div>
+  )
+}
+
+// Clickable unit code: opens the Unit 360° panel from anywhere.
+export function UnitLink({ id }) {
+  const { openUnit, role } = useApp()
+  if (!id) return <span className="text-slate-400">—</span>
+  if (role === 'guard') return <span className="font-semibold">{id}</span>
+  return (
+    <button onClick={(e) => (e.stopPropagation(), openUnit(id))} className="rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-xs font-semibold text-slate-700 transition hover:bg-brand-100 hover:text-brand-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-brand-500/20" title="Open unit profile">
+      {id}
+    </button>
   )
 }
 

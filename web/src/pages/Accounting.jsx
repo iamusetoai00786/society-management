@@ -1,11 +1,10 @@
 import { useState } from 'react'
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { Plus, Wallet, TrendingUp, TrendingDown, Scale, Download, Sparkles } from 'lucide-react'
-import { useApi, useAction } from '../context/AppContext'
+import { useApp, useApi, useAction } from '../context/AppContext'
 import { api } from '../api/client'
 import { Card, CardHeader, Badge, Button, Table, PageHeader, Skeleton, Input, Select, Field, Modal, Tabs, Stat, AIBadge, inr, fmtDate } from '../components/ui'
 
-const CATS = ['Security', 'Housekeeping', 'Electricity', 'Water', 'Lift AMC', 'Gardening', 'Repairs', 'Events', 'Other']
 const PIE = ['#6366f1', '#a855f7', '#ec4899', '#f59e0b', '#10b981', '#0ea5e9', '#64748b', '#ef4444']
 const guessCategory = (t) => {
   const s = t.toLowerCase()
@@ -14,6 +13,10 @@ const guessCategory = (t) => {
 }
 
 function AddExpense({ open, onClose }) {
+  const { society } = useApp()
+  const { data: cats } = useApi(open ? '/api/masters/expense-categories' : null)
+  const { data: vendors } = useApi(open ? '/api/masters/vendors' : null)
+  const CATS = (cats || []).map((c) => c.name)
   const [f, setF] = useState({ description: '', vendor: '', amount: '', category: 'Other' })
   const [auto, setAuto] = useState(false)
   const { run, busy } = useAction()
@@ -35,7 +38,9 @@ function AddExpense({ open, onClose }) {
           <Field label={<span className="flex items-center gap-2">Category {auto && <AIBadge>Auto</AIBadge>}</span>}><Select value={f.category} onChange={(e) => (setF({ ...f, category: e.target.value }), setAuto(false))} options={CATS} /></Field>
           <Field label="Amount (₹)" hint="Above ₹25,000 needs committee approval"><Input type="number" value={f.amount} onChange={(e) => setF({ ...f, amount: e.target.value })} /></Field>
         </div>
-        <Field label="Vendor"><Input value={f.vendor} onChange={(e) => setF({ ...f, vendor: e.target.value })} /></Field>
+        <Field label="Vendor" hint="Pick from Masters → Vendors or type a new one"><Input list="vendor-list" value={f.vendor} onChange={(e) => setF({ ...f, vendor: e.target.value })} /></Field>
+        <datalist id="vendor-list">{(vendors || []).map((v) => <option key={v.id} value={v.name}>{v.service}</option>)}</datalist>
+        <p className="text-xs text-slate-500">Approval limit: ₹{(society?.approvalLimit ?? 25000).toLocaleString('en-IN')}. Above it, another committee member must approve (maker–checker).</p>
         <div className="rounded-xl border border-dashed border-slate-300 p-4 text-center text-sm text-slate-500 dark:border-slate-700">📎 Drop bill/invoice here. AI extracts the vendor, amount and GST (coming soon)</div>
       </div>
     </Modal>
@@ -102,6 +107,22 @@ export default function Accounting() {
           </div>
         </>
       )}
+      {report && (
+        <Card className="mt-6">
+          <CardHeader title="Budget vs actual (this month)" subtitle="Budgets come from Masters → Expense categories" icon={Wallet} />
+          <div className="grid gap-x-8 gap-y-4 p-5 sm:grid-cols-2 xl:grid-cols-3">
+            {report.budget.filter((b) => b.budget || b.actual).map((b) => {
+              const pct = b.budget ? Math.round((b.actual / b.budget) * 100) : 100
+              return (
+                <div key={b.name}>
+                  <div className="mb-1 flex justify-between text-sm"><span className="font-medium">{b.name}</span><span className={pct > 100 ? 'font-semibold text-rose-600' : 'text-slate-500'}>{inr(b.actual)} / {b.budget ? inr(b.budget) : 'no budget'}</span></div>
+                  <div className="h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800"><div className={pct > 100 ? 'h-full rounded-full bg-rose-500' : pct > 85 ? 'h-full rounded-full bg-amber-500' : 'h-full rounded-full bg-emerald-500'} style={{ width: `${Math.min(pct, 100)}%` }} /></div>
+                </div>
+              )
+            })}
+          </div>
+        </Card>
+      )}
       <Card className="mt-6">
         <div className="border-b border-slate-100 p-4 dark:border-slate-800">
           <Tabs value={tab} onChange={setTab} tabs={[{ value: '', label: 'All' }, { value: 'pending', label: 'Pending approval' }, { value: 'approved', label: 'Approved' }, { value: 'rejected', label: 'Rejected' }]} />
@@ -111,7 +132,8 @@ export default function Accounting() {
             { key: 'date', label: 'Date', render: (e) => fmtDate(e.date) },
             { key: 'description', label: 'Description', render: (e) => <div><p className="font-medium">{e.description}</p><p className="text-xs text-slate-500">{e.vendor}</p></div> },
             { key: 'category', label: 'Category', render: (e) => <Badge tone="purple">{e.category}</Badge> },
-            { key: 'amount', label: 'Amount', render: (e) => <span className="font-semibold">{inr(e.amount)}</span> },
+            { key: 'amount', label: 'Amount', align: 'right', render: (e) => <span className="font-semibold">{inr(e.amount)}</span> },
+            { key: 'createdBy', label: 'Maker → checker', render: (e) => <span className="text-xs text-slate-500">{e.createdBy}{e.approvedBy ? ` → ${e.approvedBy}` : ' → pending'}</span> },
             { key: 'status', label: 'Status', render: (e) => <Badge>{e.status}</Badge> },
             { key: 'x', label: '', render: (e) => e.status === 'pending' && (
               <div className="flex gap-1">

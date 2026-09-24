@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import { HardHat, Phone } from 'lucide-react'
 import { useApi, useAction } from '../context/AppContext'
 import { api } from '../api/client'
@@ -9,14 +10,14 @@ export default function Staff() {
   const present = (data || []).filter((s) => s.present).length
   return (
     <>
-      <PageHeader title="Staff" subtitle="Security, maintenance and housekeeping team with today’s attendance." />
-      <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-3">
+      <PageHeader title="Staff" subtitle={<>Today’s attendance. Add or edit staff in <Link className="font-medium text-brand-600" to="/masters?tab=staff">Master tables → Staff</Link>.</>} />
+      <div className="mb-6 grid grid-cols-2 gap-4 xl:grid-cols-3">
         <Stat label="Total staff" value={data?.length ?? '…'} icon={HardHat} />
         <Stat label="Present today" value={present} tone="green" icon={HardHat} />
         <Stat label="Absent" value={(data?.length || 0) - present} tone="rose" icon={HardHat} />
       </div>
       {!data ? <Skeleton /> : (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
           {data.map((s) => (
             <Card key={s.id} className="flex items-center gap-4 p-4">
               <Avatar name={s.name} size="lg" />

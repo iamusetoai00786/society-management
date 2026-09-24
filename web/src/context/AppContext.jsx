@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react'
-import { api, getToken, setToken } from '../api/client'
+import { api, getToken, setToken, getSocietyId, setSocietyId } from '../api/client'
 import { CheckCircle2, XCircle, Info } from 'lucide-react'
 
 const Ctx = createContext(null)
@@ -21,6 +21,8 @@ export function AppProvider({ children }) {
   const [version, setVersion] = useState(0)
   const [assistantOpen, setAssistantOpen] = useState(false)
   const [assistantSeed, setAssistantSeed] = useState('')
+  const [society, setSociety] = useState(null)
+  const [unitOpen, setUnitOpen] = useState(null)
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', theme === 'dark')
@@ -33,8 +35,33 @@ export function AppProvider({ children }) {
 
   useEffect(() => {
     if (!getToken()) return setBooting(false)
-    api.get('/api/auth/me').then(setUser).catch(() => setToken(null)).finally(() => setBooting(false))
+    api.get('/api/auth/me').then(enter).catch(() => setToken(null)).finally(() => setBooting(false))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Society users are pinned to their society; the platform owner picks one.
+  const enter = async (u) => {
+    setUser(u)
+    if (u.role !== 'super_admin') {
+      setSocietyId(null)
+      setSociety(u.society)
+      return
+    }
+    const sid = getSocietyId()
+    if (!sid) return setSociety(null)
+    const list = await api.get('/api/public/societies')
+    const soc = list.find((x) => x.id === sid)
+    if (!soc) setSocietyId(null)
+    setSociety(soc || null)
+  }
+  const switchSociety = (soc) => {
+    setSocietyId(soc?.id || null)
+    setSociety(soc || null)
+    setUnitOpen(null)
+    setVersion((v) => v + 1)
+  }
+  // Role used for navigation: the platform owner acts as admin inside a society.
+  const role = !user ? null : user.role === 'super_admin' ? (society ? 'admin' : 'platform') : user.role
 
   const toast = useCallback((message, type = 'success') => {
     const id = Math.random()
@@ -42,15 +69,19 @@ export function AppProvider({ children }) {
     setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 3500)
   }, [])
 
-  const login = async (role) => {
-    const { token, user } = await api.post('/api/auth/login', { role })
+  const login = async (userId) => {
+    const { token, user } = await api.post('/api/auth/login', { userId })
     setToken(token)
-    setUser(user)
+    setSocietyId(null)
+    await enter(user)
   }
   const logout = async () => {
     await api.post('/api/auth/logout').catch(() => {})
     setToken(null)
+    setSocietyId(null)
     setUser(null)
+    setSociety(null)
+    setAssistantOpen(false)
   }
   const refresh = useCallback(() => setVersion((v) => v + 1), [])
   const askAssistant = (text = '') => {
@@ -59,7 +90,7 @@ export function AppProvider({ children }) {
   }
 
   return (
-    <Ctx.Provider value={{ user, booting, login, logout, theme, setTheme, toast, version, refresh, assistantOpen, setAssistantOpen, assistantSeed, setAssistantSeed, askAssistant }}>
+    <Ctx.Provider value={{ user, role, society, switchSociety, unitOpen, openUnit: setUnitOpen, booting, login, logout, theme, setTheme, toast, version, refresh, assistantOpen, setAssistantOpen, assistantSeed, setAssistantSeed, askAssistant }}>
       {children}
       <div className="pointer-events-none fixed bottom-4 right-4 z-[100] flex flex-col gap-2">
         {toasts.map((t) => (

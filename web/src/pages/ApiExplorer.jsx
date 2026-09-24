@@ -7,7 +7,15 @@ import { Card, CardHeader, Button, PageHeader, Input, Textarea, cx } from '../co
 
 const M = { GET: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400', POST: 'bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-400', PUT: 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400', PATCH: 'bg-violet-100 text-violet-700 dark:bg-violet-500/15 dark:text-violet-400', DELETE: 'bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-400' }
 const SAMPLE = {
-  'POST /api/auth/login': { role: 'resident' },
+  'POST /api/auth/login': { userId: 'usr_gv_resident_1' },
+  'POST /api/platform/societies': { name: 'Test Society', code: 'TS', city: 'Chennai', blocks: [{ code: 'A', name: 'Block A', floors: 3, unitsPerFloor: 4 }], unitTypes: [{ name: '2BHK', areaSqft: 1000 }], admin: { name: 'Test Admin' } },
+  'POST /api/ai/structure': { text: '3 towers A, B, C with 10 floors and 4 flats per floor, 2BHK and 3BHK' },
+  'POST /api/ai/explain-ledger': { unitId: 'B-203' },
+  'POST /api/masters/:type': { name: 'Water', basis: 'fixed', rate: 300, active: true },
+  'POST /api/units': { blockId: '', floor: 5, number: 1, unitTypeId: '' },
+  'POST /api/invoices/:id/cancel': { reason: 'Raised in error' },
+  'PATCH /api/parking/:id': { unitId: 'B-203' },
+  'PATCH /api/platform/societies/:id': { plan: 'Premium' },
   'POST /api/ai/chat': { message: 'Who are the top defaulters?' },
   'POST /api/ai/classify-ticket': { title: 'Water leaking from ceiling since 2 days' },
   'POST /api/ai/draft-notice': { prompt: 'Diwali celebration on 20th October', tone: 'friendly' },
@@ -15,17 +23,18 @@ const SAMPLE = {
   'POST /api/visitors': { name: 'Amazon Partner', unitId: 'B-203', type: 'delivery', company: 'Amazon' },
   'POST /api/visitors/preapprove': { name: 'Anita Rao', phone: '+91 98111 00000' },
   'POST /api/visitors/verify-code': { code: '482913' },
-  'POST /api/invoices/:id/pay': { method: 'UPI' },
-  'POST /api/bookings': { amenityId: 'am_gym', date: new Date().toISOString().slice(0, 10), slot: '06:00-07:00' },
+  'POST /api/visitors/:id/approve': {},
+  'POST /api/invoices/:id/pay': { method: 'UPI', amount: 1000 },
+  'POST /api/bookings': { amenityId: '', date: new Date().toISOString().slice(0, 10), slot: '06:00-07:00' },
   'POST /api/expenses': { category: 'Repairs', vendor: 'AquaFix', description: 'Pump repair', amount: 12000 },
   'POST /api/notices': { title: 'Test notice', body: 'Hello residents' },
   'POST /api/polls': { question: 'Paint colour?', options: ['Cream', 'Grey'], days: 5 },
-  'POST /api/residents': { name: 'Test Resident', unitId: 'A-102', type: 'tenant' },
+  'POST /api/residents': { name: 'Test Resident', unitId: 'A-102', type: 'tenant', leaseEnd: '2027-03-31', appAccess: true },
   'POST /api/sos': { type: 'Medical', message: 'Test alert' },
 }
 
 export default function ApiExplorer() {
-  const { refresh } = useApp()
+  const { refresh, society } = useApp()
   const [q, setQ] = useState('')
   const [sel, setSel] = useState(routes.find((r) => r.path === '/api/dashboard/summary'))
   const [path, setPath] = useState(sel.path)
@@ -39,7 +48,10 @@ export default function ApiExplorer() {
   }, [q])
   const pick = (r) => {
     setSel(r)
-    setPath(r.path.replace(':id', r.path.includes('invoices') ? `INV-${new Date().toISOString().slice(0, 7).replace('-', '')}-B-203` : r.path.includes('units') ? 'B-203' : r.path.includes('tickets') ? 'TCK-1040' : r.path.includes('amenities') ? 'am_gym' : ':id'))
+    const code = society?.code || 'GV'
+    const month = new Date().toISOString().slice(0, 7).replace('-', '')
+    const sample = r.path.includes('invoices') ? `INV-${code}-${month}-${code === 'GV' ? 'B-203' : code === 'LV' ? 'T1-203' : 'V-07'}` : r.path.includes('units') ? (code === 'LV' ? 'T1-203' : code === 'SE' ? 'V-07' : 'B-203') : r.path.includes('tickets') ? `TCK-${code}-1040` : ':id'
+    setPath(r.path.replace(':type', 'charge-heads').replace(':id', sample))
     setBody(SAMPLE[`${r.method} ${r.path}`] ? JSON.stringify(SAMPLE[`${r.method} ${r.path}`], null, 2) : r.method === 'GET' || r.method === 'DELETE' ? '' : '{}')
     setRes(null)
   }

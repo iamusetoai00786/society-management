@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Sparkles, TrendingDown, MessageSquareText, Wand2, Brain } from 'lucide-react'
 import { useApi, useAction } from '../context/AppContext'
 import { api } from '../api/client'
-import { Card, CardHeader, Badge, Button, AIBadge, Table, inr, PageHeader, Skeleton, Textarea, cx } from '../components/ui'
+import { Card, CardHeader, Badge, Button, AIBadge, Table, UnitLink, inr, PageHeader, Skeleton, Textarea, cx } from '../components/ui'
 import { InsightsList } from './Dashboard'
 
 function TriagePlayground() {
@@ -62,14 +62,14 @@ export default function Insights() {
           <CardHeader title="Defaulter risk prediction" icon={TrendingDown} subtitle="GET /api/ai/defaulter-risk: scored from payment history" />
           {loading && !risk ? <Skeleton /> : (
             <Table rows={(risk || []).slice(0, 12)} columns={[
-              { key: 'unitId', label: 'Unit', render: (r) => <span className="font-semibold">{r.unitId}</span> },
+              { key: 'unitId', label: 'Unit', render: (r) => <UnitLink id={r.unitId} /> },
               { key: 'resident', label: 'Resident' },
               { key: 'score', label: 'Risk', render: (r) => (
                 <div className="flex items-center gap-2">
                   <div className="h-1.5 w-20 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800"><div className={cx('h-full rounded-full', r.level === 'high' ? 'bg-rose-500' : r.level === 'medium' ? 'bg-amber-500' : 'bg-emerald-500')} style={{ width: `${r.score}%` }} /></div>
                   <span className="text-xs font-medium">{r.score}</span>
                 </div>) },
-              { key: 'outstanding', label: 'Outstanding', render: (r) => inr(r.outstanding) },
+              { key: 'outstanding', label: 'Outstanding', align: 'right', render: (r) => inr(r.outstanding) },
               { key: 'reason', label: 'Why', className: 'text-slate-500' },
               { key: 'action', label: 'Suggested action', render: (r) => r.unpaid ? <Button size="sm" variant="secondary" onClick={() => run(() => api.post('/api/invoices/remind-all'), `Smart reminder queued for ${r.unitId}`)}>{r.level === 'high' ? 'Call + remind' : 'Send reminder'}</Button> : <span className="text-xs text-slate-400">{r.action}</span> },
             ]} />

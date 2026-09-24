@@ -44,7 +44,7 @@ export default function Amenities() {
                 <div key={s.slot} className={cx('rounded-xl border p-4', s.available ? 'border-slate-200 dark:border-slate-700' : 'border-slate-100 bg-slate-50 opacity-60 dark:border-slate-800 dark:bg-slate-800/40')}>
                   <p className="font-semibold">{s.slot}</p>
                   <p className="mt-1 flex items-center gap-1 text-xs text-slate-500"><Users className="size-3.5" /> {s.taken}/{s.capacity} booked</p>
-                  <Button size="sm" className="mt-3 w-full" disabled={!s.available || user.role === 'admin'} loading={busy}
+                  <Button size="sm" className="mt-3 w-full" disabled={!s.available || user.role !== 'resident'} loading={busy}
                     onClick={() => run(() => api.post('/api/bookings', { amenityId: sel, date, slot: s.slot }), (b) => (b.status === 'pending' ? 'Request sent for approval' : 'Booking confirmed 🎉'))}>
                     {s.available ? (a?.fee ? `Book · ${inr(a.fee)}` : 'Book') : 'Full'}
                   </Button>
@@ -57,7 +57,7 @@ export default function Amenities() {
         <Card>
           <CardHeader title={user.role === 'admin' ? 'All bookings' : 'My bookings'} icon={CalendarDays} />
           <Table rows={(bookings || []).slice(0, 10)} empty="No bookings" columns={[
-            { key: 'a', label: 'Amenity', render: (b) => <div><p className="font-medium">{name(b.amenityId)}</p><p className="text-xs text-slate-500">{fmtDate(b.date, { day: 'numeric', month: 'short' })} · {b.slot}{user.role === 'admin' ? ` · ${b.unitId}` : ''}</p></div> },
+            { key: 'a', label: 'Amenity', render: (b) => <div><p className="font-medium">{b.amenity || name(b.amenityId)}</p><p className="text-xs text-slate-500">{fmtDate(b.date, { day: 'numeric', month: 'short' })} · {b.slot}{user.role === 'admin' ? ` · ${b.unitId}` : ''}</p></div> },
             { key: 'status', label: '', render: (b) => user.role === 'admin' && b.status === 'pending'
               ? <Button size="sm" variant="success" onClick={() => run(() => api.patch(`/api/bookings/${b.id}`, { status: 'confirmed' }), 'Booking approved')}>Approve</Button>
               : b.status !== 'cancelled' && user.role === 'resident'

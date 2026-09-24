@@ -2,41 +2,68 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, Users, Receipt, Wallet, DoorOpen, Wrench, Megaphone, Vote, CalendarDays, FileText, HardHat, Car, Siren,
-  Code2, Settings, Sparkles, Search, Bell, Moon, Sun, LogOut, Menu, X, ChevronDown, Rocket, Building2,
+  Code2, Settings, Sparkles, Search, Bell, Moon, Sun, LogOut, Menu, X, ChevronDown, Rocket, Building2, Database, History, Compass, Globe2, PlusCircle, ArrowLeftRight, Check,
 } from 'lucide-react'
 import { useApp, useApi, useAction } from '../context/AppContext'
 import { api } from '../api/client'
 import { cx, Avatar, ago, Modal, Button, Select, Field, Textarea } from './ui'
 import Assistant from './Assistant'
+import UnitDrawer from './UnitDrawer'
 
+// roles: platform (owner, no society picked) | admin | resident | guard.
+// The platform owner inside a society sees the admin menu plus Platform items.
+const A = ['admin'], AR = ['admin', 'resident'], ALL = ['admin', 'resident', 'guard']
 export const NAV = [
+  { section: 'Platform', items: [
+    { to: '/', label: 'Platform overview', icon: Globe2, roles: ['platform'] },
+    { to: '/societies', label: 'Societies', icon: Building2, roles: ['platform'], platform: true },
+    { to: '/societies/new', label: 'Onboard society', icon: PlusCircle, roles: ['platform'], platform: true },
+  ] },
   { section: 'Overview', items: [
-    { to: '/', label: 'Dashboard', icon: LayoutDashboard, roles: ['admin', 'resident', 'guard'] },
-    { to: '/insights', label: 'AI Insights', icon: Sparkles, roles: ['admin'], ai: true },
+    { to: '/', label: 'Dashboard', icon: LayoutDashboard, roles: ALL },
+    { to: '/insights', label: 'AI Insights', icon: Sparkles, roles: A, ai: true },
+    { to: '/guide', label: 'How it works', icon: Compass, roles: ['platform', ...ALL] },
   ] },
-  { section: 'Management', items: [
-    { to: '/residents', label: 'Residents & Units', icon: Users, roles: ['admin'] },
-    { to: '/billing', label: 'Billing & Payments', icon: Receipt, roles: ['admin', 'resident'] },
-    { to: '/accounting', label: 'Accounting', icon: Wallet, roles: ['admin'] },
-    { to: '/visitors', label: 'Visitors & Gate', icon: DoorOpen, roles: ['admin', 'resident', 'guard'] },
-    { to: '/helpdesk', label: 'Helpdesk', icon: Wrench, roles: ['admin', 'resident'] },
+  { section: 'Setup', items: [
+    { to: '/masters', label: 'Master tables', icon: Database, roles: A },
+    { to: '/residents', label: 'Residents & Units', icon: Users, roles: A },
   ] },
-  { section: 'Community', items: [
-    { to: '/notices', label: 'Notices', icon: Megaphone, roles: ['admin', 'resident', 'guard'] },
-    { to: '/polls', label: 'Polls & Voting', icon: Vote, roles: ['admin', 'resident'] },
-    { to: '/amenities', label: 'Amenity Booking', icon: CalendarDays, roles: ['admin', 'resident'] },
-    { to: '/documents', label: 'Documents', icon: FileText, roles: ['admin', 'resident'] },
+  { section: 'Money', items: [
+    { to: '/billing', label: 'Billing & Payments', icon: Receipt, roles: AR },
+    { to: '/accounting', label: 'Accounting', icon: Wallet, roles: A },
   ] },
-  { section: 'Operations', items: [
-    { to: '/staff', label: 'Staff', icon: HardHat, roles: ['admin', 'guard'] },
+  { section: 'Daily operations', items: [
+    { to: '/visitors', label: 'Visitors & Gate', icon: DoorOpen, roles: ALL },
+    { to: '/helpdesk', label: 'Helpdesk', icon: Wrench, roles: AR },
+    { to: '/staff', label: 'Staff attendance', icon: HardHat, roles: ['admin', 'guard'] },
     { to: '/parking', label: 'Parking', icon: Car, roles: ['admin', 'guard'] },
     { to: '/sos', label: 'SOS Alerts', icon: Siren, roles: ['admin', 'guard'] },
   ] },
-  { section: 'Developer', items: [
-    { to: '/api-explorer', label: 'API Explorer', icon: Code2, roles: ['admin', 'resident', 'guard'] },
-    { to: '/settings', label: 'Settings', icon: Settings, roles: ['admin'] },
+  { section: 'Community', items: [
+    { to: '/notices', label: 'Notices', icon: Megaphone, roles: ALL },
+    { to: '/polls', label: 'Polls & Voting', icon: Vote, roles: AR },
+    { to: '/amenities', label: 'Amenity Booking', icon: CalendarDays, roles: AR },
+    { to: '/documents', label: 'Documents', icon: FileText, roles: AR },
+  ] },
+  { section: 'System', items: [
+    { to: '/activity', label: 'Activity log', icon: History, roles: AR },
+    { to: '/settings', label: 'Settings', icon: Settings, roles: A },
+    { to: '/api-explorer', label: 'API Explorer', icon: Code2, roles: ['platform', ...ALL] },
   ] },
 ]
+// Menu entries visible to the current user.
+export function navFor(user, role) {
+  const seen = new Set()
+  return NAV.map((sec) => ({
+    section: sec.section,
+    items: sec.items.filter((i) => {
+      const ok = i.roles.includes(role) || (user.role === 'super_admin' && i.platform)
+      if (!ok || seen.has(i.to)) return false
+      seen.add(i.to)
+      return true
+    }),
+  })).filter((sec) => sec.items.length)
+}
 
 const WHATS_NEW = [
   ['AI Assistant with voice', 'Ask about dues, bookings or complaints by typing or speaking. Press ⌘/Ctrl + J.'],
@@ -44,31 +71,78 @@ const WHATS_NEW = [
   ['AI notice writer', 'Describe a notice in one line and get a polished draft in your chosen tone.'],
   ['Defaulter risk prediction', 'Payment-risk score for every unit, with a recommended follow-up.'],
   ['Anomaly insights', 'Spending spikes, complaint hotspots and pending approvals flagged automatically.'],
+  ['Multi-society platform', 'One login for the platform owner, society switcher, onboarding wizard with AI structure builder.'],
+  ['Master tables', 'Blocks, unit types, charge heads, categories, amenities, vendors and staff drive everything else.'],
+  ['Unit 360° & ledger', 'Click any unit code to see residents, statement, visitors and tickets, with an AI explanation of dues.'],
+  ['Activity log', 'Every action records who did what and when.'],
   ['Command palette', 'Press ⌘/Ctrl + K to jump anywhere or run actions.'],
   ['Gate passes with OTP', 'Residents pre-approve guests; guards check them in with a 6-digit code.'],
   ['Dark mode & mobile-first', 'Redesigned UI that works on phones, tablets at the gate and desktops.'],
 ]
 
+function SocietySwitcher() {
+  const { user, society, switchSociety } = useApp()
+  const [open, setOpen] = useState(false)
+  const { data } = useApi(user.role === 'super_admin' ? '/api/public/societies' : null)
+  const navigate = useNavigate()
+  if (user.role !== 'super_admin') {
+    return (
+      <div className="min-w-0">
+        <p className="truncate font-bold leading-tight text-slate-900 dark:text-white">SocietyOS</p>
+        <p className="truncate text-[11px] text-slate-500">{society?.name}</p>
+      </div>
+    )
+  }
+  const pick = (soc) => {
+    setOpen(false)
+    switchSociety(soc)
+    navigate('/')
+  }
+  return (
+    <div className="relative min-w-0 flex-1">
+      <button onClick={() => setOpen((o) => !o)} className="flex w-full items-center gap-1 rounded-lg text-left hover:bg-slate-50 dark:hover:bg-slate-800">
+        <div className="min-w-0 flex-1">
+          <p className="truncate font-bold leading-tight text-slate-900 dark:text-white">{society ? society.name : 'SocietyOS'}</p>
+          <p className="truncate text-[11px] text-slate-500">{society ? `Viewing as platform owner` : 'Platform · all societies'}</p>
+        </div>
+        <ArrowLeftRight className="size-4 shrink-0 text-slate-400" />
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <div className="animate-pop absolute left-0 z-50 mt-2 w-60 rounded-2xl border border-slate-200 bg-white p-2 shadow-xl dark:border-slate-700 dark:bg-slate-900">
+            <button onClick={() => pick(null)} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-slate-100 dark:hover:bg-slate-800"><Globe2 className="size-4 text-slate-400" /> <span className="flex-1">Platform overview</span>{!society && <Check className="size-4 text-brand-600" />}</button>
+            <p className="px-3 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Societies</p>
+            {(data || []).map((x) => (
+              <button key={x.id} onClick={() => pick(x)} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-slate-100 dark:hover:bg-slate-800">
+                <span className="grid size-6 place-items-center rounded-md bg-brand-50 text-[10px] font-bold text-brand-700 dark:bg-brand-500/10 dark:text-brand-100">{x.code}</span>
+                <span className="min-w-0 flex-1 truncate">{x.name}</span>
+                {society?.id === x.id && <Check className="size-4 text-brand-600" />}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
 function Sidebar({ open, onClose }) {
-  const { user } = useApp()
+  const { user, role } = useApp()
   return (
     <>
       <div className={cx('fixed inset-0 z-30 bg-slate-950/40 lg:hidden', open ? 'block' : 'hidden')} onClick={onClose} />
       <aside className={cx('scrollbar-thin fixed inset-y-0 left-0 z-40 flex w-64 flex-col overflow-y-auto border-r border-slate-200 bg-white transition-transform lg:translate-x-0 dark:border-slate-800 dark:bg-slate-900', open ? 'translate-x-0' : '-translate-x-full')}>
         <div className="flex items-center justify-between px-5 py-5">
-          <div className="flex items-center gap-2.5">
-            <div className="ai-gradient grid size-9 place-items-center rounded-xl text-white shadow-md shadow-purple-500/30"><Building2 className="size-5" /></div>
-            <div>
-              <p className="font-bold leading-tight text-slate-900 dark:text-white">SocietyOS</p>
-              <p className="text-[11px] text-slate-500">Green Valley Residency</p>
-            </div>
+          <div className="flex min-w-0 flex-1 items-center gap-2.5">
+            <div className="ai-gradient grid size-9 shrink-0 place-items-center rounded-xl text-white shadow-md shadow-purple-500/30"><Building2 className="size-5" /></div>
+            <SocietySwitcher />
           </div>
           <button className="lg:hidden" onClick={onClose} aria-label="Close menu"><X className="size-5" /></button>
         </div>
         <nav className="flex-1 space-y-5 px-3 pb-6">
-          {NAV.map((s) => {
-            const items = s.items.filter((i) => i.roles.includes(user.role))
-            if (!items.length) return null
+          {navFor(user, role).map((s) => {
+            const items = s.items
             return (
               <div key={s.section}>
                 <p className="px-3 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">{s.section}</p>
@@ -94,11 +168,11 @@ function Sidebar({ open, onClose }) {
 }
 
 function CommandPalette({ open, onClose }) {
-  const { user, askAssistant, setTheme, theme } = useApp()
+  const { user, role, askAssistant, setTheme, theme, openUnit } = useApp()
   const navigate = useNavigate()
   const [q, setQ] = useState('')
   const [idx, setIdx] = useState(0)
-  const { data: residents } = useApi(open && user.role === 'admin' ? '/api/residents' : null)
+  const { data: residents } = useApi(open && role === 'admin' ? '/api/residents' : null)
   const inputRef = useRef(null)
   useEffect(() => {
     if (open) {
@@ -109,18 +183,19 @@ function CommandPalette({ open, onClose }) {
   }, [open])
 
   const items = useMemo(() => {
-    const pages = NAV.flatMap((s) => s.items).filter((i) => i.roles.includes(user.role)).map((i) => ({ label: i.label, hint: 'Page', icon: i.icon, run: () => navigate(i.to) }))
+    const pages = navFor(user, role).flatMap((s) => s.items).map((i) => ({ label: i.label, hint: 'Page', icon: i.icon, run: () => navigate(i.to) }))
     const actions = [
       { label: 'Toggle dark mode', hint: 'Action', icon: theme === 'dark' ? Sun : Moon, run: () => setTheme(theme === 'dark' ? 'light' : 'dark') },
-      user.role === 'resident' && { label: 'Create gate pass for a guest', hint: 'Action', icon: DoorOpen, run: () => navigate('/visitors?pass=1') },
-      user.role !== 'guard' && { label: 'Raise a complaint', hint: 'Action', icon: Wrench, run: () => navigate('/helpdesk?new=') },
+      role === 'resident' && { label: 'Create gate pass for a guest', hint: 'Action', icon: DoorOpen, run: () => navigate('/visitors?pass=1') },
+      ['admin', 'resident'].includes(role) && { label: 'Raise a complaint', hint: 'Action', icon: Wrench, run: () => navigate('/helpdesk?new=') },
     ].filter(Boolean)
     const people = (residents || []).slice(0, 200).map((r) => ({ label: `${r.name}`, hint: r.unitId, icon: Users, run: () => navigate(`/residents?q=${encodeURIComponent(r.name)}`) }))
-    const all = [...pages, ...actions, ...people]
+    const units = (residents || []).slice(0, 200).map((r) => ({ label: `Unit ${r.unitId}`, hint: 'Unit 360°', icon: Building2, run: () => openUnit(r.unitId) }))
+    const all = [...pages, ...actions, ...people, ...units]
     const f = q ? all.filter((i) => `${i.label} ${i.hint}`.toLowerCase().includes(q.toLowerCase())) : [...pages, ...actions]
     const ask = q && { label: `Ask AI: “${q}”`, hint: 'AI', icon: Sparkles, run: () => askAssistant(q), ai: true }
     return (ask ? [ask, ...f] : f).slice(0, 9)
-  }, [q, residents, user.role, theme, navigate, setTheme, askAssistant])
+  }, [q, residents, user, role, theme, navigate, setTheme, askAssistant, openUnit])
 
   if (!open) return null
   const choose = (i) => {
@@ -237,13 +312,17 @@ function SOSButton() {
   )
 }
 
+const ROLE_LABEL = { super_admin: 'Platform owner', admin: 'Committee admin', resident: 'Resident', guard: 'Security' }
+
 function UserMenu() {
-  const { user, logout, login } = useApp()
+  const { user, society, logout, login } = useApp()
   const [open, setOpen] = useState(false)
   const navigate = useNavigate()
-  const switchRole = async (r) => {
+  const sid = user.role === 'super_admin' ? null : user.societyId
+  const { data: people } = useApi(open && sid ? `/api/public/directory?societyId=${sid}` : null)
+  const switchTo = async (id) => {
     setOpen(false)
-    await login(r)
+    await login(id)
     navigate('/')
   }
   return (
@@ -252,20 +331,34 @@ function UserMenu() {
         <Avatar name={user.name} size="sm" />
         <div className="hidden text-left md:block">
           <p className="text-sm font-medium leading-tight">{user.name}</p>
-          <p className="text-[11px] capitalize text-slate-500">{user.title}{user.unitId ? ` · ${user.unitId}` : ''}</p>
+          <p className="text-[11px] text-slate-500">{user.title}{user.unitId ? ` · ${user.unitId}` : ''}</p>
         </div>
         <ChevronDown className="size-4 text-slate-400" />
       </button>
       {open && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="animate-pop absolute right-0 z-50 mt-2 w-56 rounded-2xl border border-slate-200 bg-white p-2 shadow-xl dark:border-slate-700 dark:bg-slate-900">
-            <p className="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Switch demo role</p>
-            {[['admin', 'Admin / Secretary'], ['resident', 'Resident (B-203)'], ['guard', 'Security Guard']].map(([r, l]) => (
-              <button key={r} onClick={() => switchRole(r)} className={cx('w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-slate-100 dark:hover:bg-slate-800', user.role === r && 'font-semibold text-brand-600')}>{l}</button>
-            ))}
+          <div className="animate-pop absolute right-0 z-50 mt-2 w-72 rounded-2xl border border-slate-200 bg-white p-2 shadow-xl dark:border-slate-700 dark:bg-slate-900">
+            <div className="px-3 py-2">
+              <p className="font-semibold">{user.name}</p>
+              <p className="text-xs text-slate-500">{ROLE_LABEL[user.role]} · {society?.name || 'All societies'}</p>
+            </div>
+            {people?.length > 1 && (
+              <>
+                <p className="px-3 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Switch to someone in this society</p>
+                <div className="max-h-56 overflow-y-auto">
+                  {people.filter((p) => p.id !== user.id).map((p) => (
+                    <button key={p.id} onClick={() => switchTo(p.id)} className="flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left text-sm hover:bg-slate-100 dark:hover:bg-slate-800">
+                      <Avatar name={p.name} size="sm" />
+                      <span className="min-w-0 flex-1 truncate">{p.name}</span>
+                      <span className="text-[11px] text-slate-400">{p.unitId || p.title}</span>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
             <div className="my-1 border-t border-slate-100 dark:border-slate-800" />
-            <button onClick={logout} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-500/10"><LogOut className="size-4" /> Log out</button>
+            <button onClick={logout} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-500/10"><LogOut className="size-4" /> Log out / change society</button>
           </div>
         </>
       )}
@@ -274,7 +367,8 @@ function UserMenu() {
 }
 
 export default function Layout() {
-  const { theme, setTheme, setAssistantOpen, user } = useApp()
+  const { theme, setTheme, setAssistantOpen, user, role, society, switchSociety } = useApp()
+  const navigate = useNavigate()
   const [menu, setMenu] = useState(false)
   const [palette, setPalette] = useState(false)
   const [news, setNews] = useState(false)
@@ -306,17 +400,24 @@ export default function Layout() {
             <button onClick={() => setAssistantOpen(true)} className="ai-gradient hidden items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold text-white shadow-md shadow-purple-500/25 sm:flex"><Sparkles className="size-4" /> Ask AI</button>
             <button onClick={() => setNews(true)} className="hidden rounded-xl p-2 sm:block text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800" title="What's new" aria-label="What's new"><Rocket className="size-5" /></button>
             <button onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} className="hidden rounded-xl p-2 sm:block text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800" aria-label="Toggle theme">{theme === 'dark' ? <Sun className="size-5" /> : <Moon className="size-5" />}</button>
-            <Notifications />
-            {user.role !== 'guard' && <SOSButton />}
+            {role !== 'platform' && <Notifications />}
+            {['admin', 'resident'].includes(role) && user.role !== 'super_admin' && <SOSButton />}
             <UserMenu />
           </div>
         </header>
-        <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:py-8">
+        {user.role === 'super_admin' && society && (
+          <div className="flex flex-wrap items-center gap-2 border-b border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800 sm:px-6 lg:px-8 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
+            <Globe2 className="size-4" /> You are inside <strong>{society.name}</strong> as the platform owner. Every change is logged under your name.
+            <button onClick={() => (switchSociety(null), navigate('/'))} className="ml-auto rounded-lg bg-white px-2.5 py-1 text-xs font-semibold text-amber-800 shadow-sm dark:bg-slate-800 dark:text-amber-300">Exit to platform</button>
+          </div>
+        )}
+        <main className="w-full px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
           <Outlet />
         </main>
       </div>
       <button onClick={() => setAssistantOpen(true)} className="ai-gradient fixed bottom-5 right-5 z-30 grid size-14 place-items-center rounded-full text-white shadow-xl shadow-purple-500/40 transition hover:scale-105 sm:hidden" aria-label="Open AI assistant"><Sparkles className="size-6" /></button>
       <Assistant />
+      {role !== 'platform' && <UnitDrawer />}
       <CommandPalette open={palette} onClose={() => setPalette(false)} />
       <Modal open={news} onClose={() => setNews(false)} title="🚀 What’s new in SocietyOS 2.0">
         <ul className="space-y-3">

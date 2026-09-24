@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { UserPlus, KeyRound, LogOut as ExitIcon, Package, Car, User, Wrench, QrCode, Copy, Share2, Clock, ShieldCheck } from 'lucide-react'
 import { useApp, useApi, useAction } from '../context/AppContext'
 import { api } from '../api/client'
-import { Card, CardHeader, Badge, Button, Table, PageHeader, Skeleton, Input, Field, Modal, Tabs, Stat, fmtTime, fmtDate, ago, cx } from '../components/ui'
+import { Card, CardHeader, Badge, Button, Table, PageHeader, Skeleton, Input, Field, Modal, Tabs, Stat, UnitLink, fmtTime, fmtDate, ago, cx } from '../components/ui'
 
 const TYPES = [['guest', 'Guest', User], ['delivery', 'Delivery', Package], ['cab', 'Cab', Car], ['service', 'Service', Wrench]]
 const COMPANIES = { delivery: ['Amazon', 'Flipkart', 'Swiggy', 'Zomato', 'Blinkit', 'Zepto', 'BigBasket'], cab: ['Uber', 'Ola', 'Rapido'] }
@@ -27,10 +27,10 @@ function GatePass({ open, onClose }) {
   const [f, setF] = useState({ name: '', phone: '', type: 'guest' })
   const [pass, setPass] = useState(null)
   const { run, busy } = useAction()
-  const { toast } = useApp()
+  const { toast, society } = useApp()
   const create = async () => setPass(await run(() => api.post('/api/visitors/preapprove', f), 'Gate pass created'))
   const close = () => (setPass(null), setF({ name: '', phone: '', type: 'guest' }), onClose())
-  const msg = pass && `Your entry pass for Green Valley Residency (${pass.unitId}): OTP ${pass.code}, valid till ${fmtDate(pass.validUntil, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}`
+  const msg = pass && `Your entry pass for ${society?.name} (${pass.unitId}): OTP ${pass.code}, valid till ${fmtDate(pass.validUntil, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}`
   return (
     <Modal open={open} onClose={close} title={pass ? 'Gate pass ready' : 'Pre-approve a visitor'} footer={!pass && <><Button variant="secondary" onClick={close}>Cancel</Button><Button loading={busy} onClick={create} disabled={!f.name}>Create pass</Button></>}>
       {pass ? (
@@ -63,6 +63,9 @@ function GateConsole() {
   const [f, setF] = useState({ name: '', phone: '', unitId: '', type: 'delivery', company: 'Amazon', vehicle: '' })
   const [code, setCode] = useState('')
   const { run, busy } = useAction()
+  const { data: units } = useApi('/api/units')
+  const { data: passes } = useApi('/api/visitors/preapprovals')
+  const unit = units?.find((u) => u.id === f.unitId)
   const log = async (leaveAtGate = false) => {
     await run(() => api.post('/api/visitors', { ...f, leaveAtGate }), leaveAtGate ? 'Parcel left at gate. Resident notified' : 'Approval request sent to resident')
     setF({ ...f, name: '', phone: '', unitId: '', vehicle: '' })
@@ -88,7 +91,7 @@ function GateConsole() {
           )}
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Name"><Input className="py-3 text-base" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></Field>
-            <Field label="Flat / Unit"><Input className="py-3 text-base uppercase" value={f.unitId} onChange={(e) => setF({ ...f, unitId: e.target.value.toUpperCase() })} placeholder="B-203" /></Field>
+            <Field label="Flat / Unit" hint={f.unitId ? (unit ? (unit.occupancy === 'vacant' ? '⚠️ Vacant unit' : `✓ ${unit.residents.map((r) => r.name).join(', ')}`) : '⚠️ No such unit') : 'Type or pick from the list'}><Input list="unit-list" className="py-3 text-base uppercase" value={f.unitId} onChange={(e) => setF({ ...f, unitId: e.target.value.toUpperCase() })} placeholder="B-203" /></Field>
             <Field label="Phone"><Input className="py-3 text-base" value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} /></Field>
             <Field label="Vehicle no."><Input className="py-3 text-base uppercase" value={f.vehicle} onChange={(e) => setF({ ...f, vehicle: e.target.value.toUpperCase() })} /></Field>
           </div>
@@ -106,7 +109,8 @@ function GateConsole() {
             <input value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))} inputMode="numeric" placeholder="••••••" className="w-full rounded-xl bg-white/20 px-4 py-3 text-center font-mono text-2xl tracking-[0.4em] text-white outline-none placeholder:text-white/50" />
             <button onClick={verify} disabled={code.length !== 6} className="rounded-xl bg-white px-4 font-semibold text-brand-700 disabled:opacity-50">Verify</button>
           </div>
-          <p className="mt-2 text-xs text-white/70">Try demo code 482913</p>
+          <p className="mt-2 text-xs text-white/70">{passes?.[0] ? `Demo: ${passes[0].name}'s code is ${passes[0].code}` : 'No active passes right now'}</p>
+          <datalist id="unit-list">{(units || []).filter((u) => u.occupancy !== 'vacant').map((u) => <option key={u.id} value={u.id}>{u.residents.map((r) => r.name).join(', ')}</option>)}</datalist>
         </Card>
         <DailyHelp />
       </div>
@@ -163,7 +167,9 @@ export default function Visitors() {
             {loading && !data ? <Skeleton /> : (
               <Table rows={list.slice(0, 60)} empty="No visitors" columns={[
                 { key: 'name', label: 'Visitor', render: (v) => <div><p className="font-medium">{v.name}</p><p className="text-xs capitalize text-slate-500">{v.type}{v.company ? ` · ${v.company}` : ''}</p></div> },
-                { key: 'unitId', label: 'Unit', render: (v) => <span className="font-semibold">{v.unitId}</span> },
+                { key: 'unitId', label: 'Unit', render: (v) => <UnitLink id={v.unitId} /> },
+                { key: 'gate', label: 'Gate', className: 'text-xs text-slate-500' },
+                { key: 'loggedBy', label: 'Logged by', className: 'text-xs text-slate-500' },
                 { key: 'vehicle', label: 'Vehicle', render: (v) => v.vehicle || '—', className: 'text-xs text-slate-500' },
                 { key: 'checkIn', label: 'In', render: (v) => <span title={fmtDate(v.checkIn)}>{v.checkIn.startsWith(today) ? fmtTime(v.checkIn) : ago(v.checkIn)}</span> },
                 { key: 'checkOut', label: 'Out', render: (v) => fmtTime(v.checkOut) },
