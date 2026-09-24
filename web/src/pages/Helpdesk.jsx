@@ -60,7 +60,9 @@ function TicketDetail({ ticket, onClose }) {
   const [text, setText] = useState('')
   const { run } = useAction()
   const [t, setT] = useState(ticket)
-  useEffect(() => setT(ticket), [ticket])
+  useEffect(() => {
+    setT(ticket)
+  }, [ticket])
   const [draft, setDraft] = useState(null)
   if (!t) return null
   const patch = async (b, msg) => setT(await run(() => api.patch(`/api/tickets/${t.id}`, b), msg))

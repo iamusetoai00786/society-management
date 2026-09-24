@@ -36,7 +36,9 @@ export default function Assistant() {
     setSuggestions(user.role === 'admin' ? ['Who are the top defaulters?', 'Summarise open complaints', 'How much did we spend this month?', 'Draft a notice about pest control next Monday'] : user.role === 'guard' ? ['How many visitors today?', 'Latest notices'] : ['What are my dues?', 'Book the gym tomorrow evening', 'Any notices for me?', 'Report a water leak in my kitchen'])
   }, [user])
 
-  useEffect(() => endRef.current?.scrollIntoView({ behavior: 'smooth' }), [messages, thinking])
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages, thinking])
 
   useEffect(() => {
     if (assistantOpen && assistantSeed) {

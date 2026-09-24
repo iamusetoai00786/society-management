@@ -288,7 +288,9 @@ export default function Layout() {
     window.addEventListener('keydown', h)
     return () => window.removeEventListener('keydown', h)
   }, [setAssistantOpen])
-  useEffect(() => window.scrollTo(0, 0), [loc.pathname])
+  useEffect(() => {
+    window.scrollTo(0, 0)
+  }, [loc.pathname])
 
   return (
     <div className="min-h-full">
